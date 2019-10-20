@@ -509,35 +509,51 @@ func onSensorAlarm(s *WyzeSense, p packet, finished context.CancelFunc) error {
 		1 byte:  unknown, referred to as p1329
 		1 byte:  unknown
 		1 byte:  binary sensor state (1: opened/motion detected, 0: closed/no motion detected)
-		2 bytes: big endian counter for when the sensor is triggered
+		2 bytes: big endian counter sensor state change, reset when power is restored (battery changed)
 		1 byte:  signal strength, presumably something like absolute value of RSSI (lower is better)
 	*/
 	pay := p.payload
 	ts := binary.BigEndian.Uint64(pay) / 1000
 
-	alarm := Alarm{
-		SensorFlags:    pay[8],
-		MAC:            string(pay[9 : 9+8]),
-		SensorType:     SensorType(pay[17]),
-		SignalStrength: pay[25],
-		Battery:        pay[19],
-		State:          pay[22],
-		Timestamp:      time.Unix(int64(ts), 0),
+	event := Event{
+		SensorFlags: pay[8],
+		MAC:         string(pay[9 : 9+8]),
+		SensorType:  SensorType(pay[17]),
+		Timestamp:   time.Unix(int64(ts), 0),
 	}
 
-	msg := pay[19:]
+	pay = pay[18:]
 
-	log.Infof("ALARM: time=%s, mac: %s, type: %x, battery: %d, signal: %d, state: %d, data=%s",
-		alarm.Timestamp.Format(time.RFC822Z),
-		alarm.MAC,
-		alarm.SensorType,
-		alarm.Battery,
-		alarm.SignalStrength,
-		alarm.State,
-		hex.EncodeToString(msg))
+	if event.SensorFlags == 0xa2 {
+		alarm := Alarm{
+			Event:          event,
+			SignalStrength: pay[7],
+			Battery:        pay[1],
+			State:          pay[4],
+		}
+		pay = pay[8:]
 
-	if s.alarmch != nil {
-		s.alarmch <- alarm
+		log.Infof("ALARM: time=%s, mac: %s, flags: %x, type: %x, battery: %d, signal: %d, state: %d, data=%s",
+			alarm.Timestamp.Format(time.RFC822Z),
+			alarm.MAC,
+			alarm.SensorFlags,
+			byte(alarm.SensorType),
+			alarm.Battery,
+			alarm.SignalStrength,
+			alarm.State,
+			hex.EncodeToString(pay))
+
+		if s.alarmch != nil {
+			s.alarmch <- alarm
+		}
+	} else {
+		log.Infof("EVENT: time=%s, mac: %s, flags: %x, type: %x, data=%s ==> UNKNOWN",
+			event.Timestamp.Format(time.RFC822Z),
+			event.MAC,
+			event.SensorFlags,
+			byte(event.SensorType),
+			hex.EncodeToString(pay))
+
 	}
 
 	return nil

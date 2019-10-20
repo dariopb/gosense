@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -54,20 +55,81 @@ const (
 
 type SensorType byte
 
+// These are the different sensor types.
+const (
+	// Not known yet
+	SenseUnknown SensorType = 0
+	// Magnetic Switch
+	SenseSwitch SensorType = 1
+	// IR motion sensor
+	SenseMotion SensorType = 2
+)
+
+// Convert the SensorType to a string.
+func (s SensorType) String() string {
+	if b, err := s.MarshalText(); err == nil {
+		return string(b)
+	}
+	return "unknown"
+}
+
+// ParseSensorType takes a string sensor type and returns the SensorType constant.
+func ParseSensorType(sts string) (SensorType, error) {
+	switch strings.ToLower(sts) {
+	case "unknown":
+		return SenseUnknown, nil
+	case "switch":
+		return SenseSwitch, nil
+	case "motionsensor":
+		return SenseMotion, nil
+	}
+	var s SensorType
+	return s, fmt.Errorf("not a valid SensorType: %q", sts)
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *SensorType) UnmarshalText(text []byte) error {
+	l, err := ParseSensorType(string(text))
+	if err != nil {
+		return err
+	}
+
+	*s = SensorType(l)
+
+	return nil
+}
+
+func (s SensorType) MarshalText() ([]byte, error) {
+	switch s {
+	case SenseUnknown:
+		return []byte("unknown"), nil
+	case SenseSwitch:
+		return []byte("switch"), nil
+	case SenseMotion:
+		return []byte("motionsensor"), nil
+	}
+
+	return nil, fmt.Errorf("not a valid SensorType %d", s)
+}
+
 type SenseSensor struct {
 	MAC        string
 	SensorType SensorType
 	Present    bool
 }
 
+type Event struct {
+	MAC         string
+	SensorFlags byte
+	SensorType  SensorType
+	Timestamp   time.Time
+}
+
 type Alarm struct {
-	MAC            string
-	SensorFlags    byte
-	SensorType     SensorType
+	Event
 	SignalStrength byte
 	Battery        byte
 	State          byte
-	Timestamp      time.Time
 }
 
 // Packet defines packets going to and coming from the device.
