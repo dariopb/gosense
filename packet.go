@@ -76,10 +76,16 @@ func (s SensorType) String() string {
 // ParseSensorType takes a string sensor type and returns the SensorType constant.
 func ParseSensorType(sts string) (SensorType, error) {
 	switch strings.ToLower(sts) {
+	case "0":
+		fallthrough
 	case "unknown":
 		return SenseUnknown, nil
+	case "1":
+		fallthrough
 	case "switch":
 		return SenseSwitch, nil
+	case "2":
+		fallthrough
 	case "motionsensor":
 		return SenseMotion, nil
 	}
